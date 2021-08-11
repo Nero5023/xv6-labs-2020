@@ -7,6 +7,8 @@
 #include "syscall.h"
 #include "defs.h"
 
+#define SYS_NAME_LEN 8
+
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -104,6 +106,7 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_trace(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,7 +130,83 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace,
 };
+
+static void sys_call_name(int call_num, char* sys_name) {
+  switch (call_num)
+  {
+  case SYS_fork:
+    strncpy(sys_name, "fork", SYS_NAME_LEN);
+    break;
+  case SYS_exit:
+    strncpy(sys_name, "exit", SYS_NAME_LEN);
+    break;
+  case SYS_wait:
+    strncpy(sys_name, "wait", SYS_NAME_LEN);
+    break;
+  case SYS_pipe:
+    strncpy(sys_name, "pipe", SYS_NAME_LEN);
+    break;
+  case SYS_read:
+    strncpy(sys_name, "read", SYS_NAME_LEN);
+    break;
+  case SYS_kill:
+    strncpy(sys_name, "kill", SYS_NAME_LEN);
+    break;
+  case SYS_exec:
+    strncpy(sys_name, "exec", SYS_NAME_LEN);
+    break;
+  case SYS_fstat:
+    strncpy(sys_name, "fstat", SYS_NAME_LEN);
+    break;
+  case SYS_chdir:
+    strncpy(sys_name, "chdir", SYS_NAME_LEN);
+    break;
+  case SYS_dup:
+    strncpy(sys_name, "dup", SYS_NAME_LEN);
+    break;
+  case SYS_getpid:
+    strncpy(sys_name, "getpid", SYS_NAME_LEN);
+    break;
+  case SYS_sbrk:
+    strncpy(sys_name, "sbrk", SYS_NAME_LEN);
+    break;
+  case SYS_sleep:
+    strncpy(sys_name, "sleep", SYS_NAME_LEN);
+    break;
+  case SYS_uptime:
+    strncpy(sys_name, "uptime", SYS_NAME_LEN);
+    break;
+  case SYS_open:
+    strncpy(sys_name, "open", SYS_NAME_LEN);
+    break;
+  case SYS_write:
+    strncpy(sys_name, "write", SYS_NAME_LEN);
+    break;
+  case SYS_mknod:
+    strncpy(sys_name, "mknod", SYS_NAME_LEN);
+    break;
+  case SYS_unlink:
+    strncpy(sys_name, "unlink", SYS_NAME_LEN);
+    break;
+  case SYS_link:
+    strncpy(sys_name, "link", SYS_NAME_LEN);
+    break;
+  case SYS_mkdir:
+    strncpy(sys_name, "mkdir", SYS_NAME_LEN);
+    break;
+  case SYS_close:
+    strncpy(sys_name, "close", SYS_NAME_LEN);
+    break;
+  case SYS_trace:
+    strncpy(sys_name, "trace", SYS_NAME_LEN);
+    break;
+  default:
+    strncpy(sys_name, "UNKNOWN", SYS_NAME_LEN);
+    break;
+  }
+}
 
 void
 syscall(void)
@@ -138,6 +217,11 @@ syscall(void)
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     p->trapframe->a0 = syscalls[num]();
+    if ((1 << num & p->trace_mask) != 0) {
+      char sys_name[SYS_NAME_LEN];
+      sys_call_name(num, sys_name);
+      printf("%d: syscall %s -> %d\n", p->pid, sys_name, p->trapframe->a0);
+    }
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);
