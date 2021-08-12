@@ -34,12 +34,12 @@ procinit(void)
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // char *pa = kalloc();
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
   kvminithart();
 }
@@ -107,6 +107,18 @@ allocproc(void)
 found:
   p->pid = allocpid();
 
+  // Allocate proc kernel pagetable
+  p->kernel_pt = kvminit_proc_table();
+
+  // Allocate a page for process's kernel stack
+  // Map it high in p->kernel_pt memory
+  char *pa = kalloc();
+  if (pa == 0)
+    panic("allocproc");
+  uint64 va = KSTACK(0);
+  kvmmap_proc(p->kernel_pt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -142,6 +154,9 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
+  if (p->kernel_pt)
+    proc_free_kernel_pagetable(p->kernel_pt);
+  p->kernel_pt = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -193,6 +208,12 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
+}
+
+void proc_free_kernel_pagetable(pagetable_t pagetable) {
+  uint64 va = KSTACK(0);
+  uvmunmap(pagetable, va, 1, 1);
+  freewalk_ignore_leaf(pagetable);
 }
 
 // a user program that calls exec("/init")
@@ -473,6 +494,9 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        inithart_kpt(p->kernel_pt);
+
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
@@ -486,6 +510,7 @@ scheduler(void)
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
+      kvminithart();
       asm volatile("wfi");
     }
 #else
