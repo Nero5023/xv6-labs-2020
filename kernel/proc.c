@@ -160,7 +160,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   if (p->kernel_pt)
-    proc_free_kernel_pagetable(p->kernel_pt);
+    proc_free_kernel_pagetable(p->kernel_pt, p->kstack);
   p->kernel_pt = 0;
   p->sz = 0;
   p->pid = 0;
@@ -215,9 +215,10 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmfree(pagetable, sz);
 }
 
-void proc_free_kernel_pagetable(pagetable_t pagetable) {
-  uint64 va = KSTACK(0);
-  uvmunmap(pagetable, va, 1, 1);
+void proc_free_kernel_pagetable(pagetable_t pagetable, uint64 kernel_stack_va) {
+  uint64 va = kernel_stack_va;
+  if (va)
+    uvmunmap(pagetable, va, 1, 1);
   freewalk_ignore_leaf(pagetable);
 }
 
@@ -246,6 +247,7 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  u2ukernel_mem_copy(p->pagetable, p->kernel_pt, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -272,8 +274,10 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    u2ukernel_mem_copy(p->pagetable, p->kernel_pt, sz-n, sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    u2ukernel_mem_copy(p->pagetable, p->kernel_pt, sz, sz-n);
   }
   p->sz = sz;
   return 0;
@@ -300,6 +304,7 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  u2ukernel_mem_copy(np->pagetable, np->kernel_pt, 0, np->sz);
 
   np->parent = p;
 
