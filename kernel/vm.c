@@ -51,6 +51,8 @@ kvminit()
 
 pagetable_t kvminit_proc_table() {
   pagetable_t pagetable = (pagetable_t) kalloc();
+  if (pagetable == 0)
+    return 0;
   memset(pagetable, 0, PGSIZE);
 
   // uart registers

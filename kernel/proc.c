@@ -134,7 +134,7 @@ found:
   char *pa = kalloc();
   if (pa == 0)
     panic("allocproc");
-  uint64 va = KSTACK(0);
+  uint64 va = KSTACK((int) (p-proc));
   kvmmap_proc(p->kernel_pt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
   p->kstack = va;
 
@@ -162,6 +162,8 @@ freeproc(struct proc *p)
   if (p->kernel_pt)
     proc_free_kernel_pagetable(p->kernel_pt, p->kstack);
   p->kernel_pt = 0;
+  p->kstack = 0;
+  
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
