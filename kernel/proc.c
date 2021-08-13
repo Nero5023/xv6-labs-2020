@@ -107,18 +107,6 @@ allocproc(void)
 found:
   p->pid = allocpid();
 
-  // Allocate proc kernel pagetable
-  p->kernel_pt = kvminit_proc_table();
-
-  // Allocate a page for process's kernel stack
-  // Map it high in p->kernel_pt memory
-  char *pa = kalloc();
-  if (pa == 0)
-    panic("allocproc");
-  uint64 va = KSTACK(0);
-  kvmmap_proc(p->kernel_pt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-  p->kstack = va;
-
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -132,6 +120,23 @@ found:
     release(&p->lock);
     return 0;
   }
+
+  // Allocate proc kernel pagetable
+  p->kernel_pt = kvminit_proc_table();
+  if(p->kernel_pt == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+
+  // Allocate a page for process's kernel stack
+  // Map it high in p->kernel_pt memory
+  char *pa = kalloc();
+  if (pa == 0)
+    panic("allocproc");
+  uint64 va = KSTACK(0);
+  kvmmap_proc(p->kernel_pt, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
