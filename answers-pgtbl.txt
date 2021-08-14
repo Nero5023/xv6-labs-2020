@@ -1,2 +1,5 @@
 page 0: contain text and data
 page 2: contain stack
+
+srcva + len < srcva
+prevent overflow
