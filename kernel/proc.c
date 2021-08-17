@@ -120,6 +120,17 @@ found:
     release(&p->lock);
     return 0;
   }
+  
+  // init alarm ticks
+  p->ticks = 0;
+  p->handler = 0;
+  p->ticks_pass = 0;
+  if ((p->alarm_trapframe = (struct trapframe *)kalloc()) == 0) {
+    release(&p->lock);
+    return 0;
+  }
+  p->need_wait_alarm_ret = 0;
+
 
   // Set up new context to start executing at forkret,
   // which returns to user space.

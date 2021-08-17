@@ -1,0 +1,14 @@
+1.
+a0-a7
+a2
+
+2. it doesn't, it just load 12 
+
+3. 0x628
+
+4. 0x38
+
+5. He110 world
+0x726c6400
+
+6. depend on register $a2's value
