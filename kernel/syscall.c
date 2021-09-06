@@ -61,6 +61,31 @@ argint(int n, int *ip)
   return 0;
 }
 
+int lazy_allocate(uint64 va) {
+  struct proc *p = myproc();
+  va = PGROUNDDOWN(va);
+  if (walkaddr(p->pagetable, va) != 0) {
+    return 1;
+  }
+  
+  void * mem = kalloc();
+  if (mem == 0) {
+    p->killed = 1;
+    exit(-1);
+    return -1;
+  }
+  memset(mem, 0, PGSIZE);
+  
+  
+  if (mappages(p->pagetable, va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
+    kfree(mem);
+    p->killed = 1;
+    exit(-1);
+    return -1;
+  }
+  return 1;
+}
+
 // Retrieve an argument as a pointer.
 // Doesn't check for legality, since
 // copyin/copyout will do that.
@@ -68,6 +93,12 @@ int
 argaddr(int n, uint64 *ip)
 {
   *ip = argraw(n);
+  if (*ip < myproc()->sz && *ip >= PGROUNDDOWN(myproc()->trapframe->sp)) {
+    lazy_allocate(*ip);
+    //lazy_uvmalloc(myproc()->pagetable, *ip);
+    // printf("sp: %p\n", myproc()->context.sp);
+    // printf("sp down: %p\n", PGROUNDDOWN(myproc()->context.sp));
+  }
   return 0;
 }
 

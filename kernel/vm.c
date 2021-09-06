@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -101,6 +103,10 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
+  // if (va == 61440) {
+  //   printf("***********\n");
+  //   printf("pte: %p, pte valid: %d, pte user: %d\n", *pte, *pte & PTE_V, *pte & PTE_U);
+  // }
   if(pte == 0)
     return 0;
   if((*pte & PTE_V) == 0)
@@ -156,8 +162,12 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
+    if(*pte & PTE_V) {
+      vmprint(myproc()->pagetable);
+      printf("va: %p, pte: %p, pa: %p\n", va, *pte, pa);
+      backtrace();
       panic("remap");
+    }
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -180,10 +190,14 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     panic("uvmunmap: not aligned");
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
-    if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+    if((pte = walk(pagetable, a, 0)) == 0) {
+      //vmprint(pagetable);
+      //printf("walk va %p error\n", a);
+      //panic("uvmunmap: walk");
+      continue;
+    }
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      continue;
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -315,9 +329,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue;
+      //panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
+      //panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -440,3 +456,47 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void print_pte(pte_t pte, int level, int i) {
+  char prefix[9];
+  int indent = 3 - level;
+  for (int i = 0; i < indent; i++) {
+    prefix[3*i] = '.';
+    prefix[3*i+1] = '.';
+    prefix[3*i+2] = ' ';
+  }
+  prefix[3*indent-1] = '\0';
+
+  printf("%s%d: pte %p pa %p\n", prefix, i, pte, PTE2PA(pte));
+}
+
+void vmprint_iter(pagetable_t pagetable, int level) {
+  if (level < 0)
+    return;
+  
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+    if (pte & PTE_V) {
+      print_pte(pte, level, i);
+      uint64 child = PTE2PA(pte);
+      vmprint_iter((pagetable_t)child, level-1);
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable) {
+  printf("page table %p\n", (uint64)pagetable);
+
+  vmprint_iter(pagetable, 2);
+  //uint64 pteadd = (uint64)pagetable;
+  //int i = 0;
+  //for (; pteadd < (uint64)pagetable + PGSIZE; pteadd+=sizeof(uint64 *)) {
+  //   printf("%d: %p\n", i, (uint64)pteadd); 
+  //   pte_t *pte = (pte_t *)pteadd;
+  //   if (*pte & PTE_V) {
+  //     printf("..%d: pte %p pa %p\n", i, *pte, PTE2PA(*pte));
+  //   }
+  //   i+=1;
+  //}
+}
+

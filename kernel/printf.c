@@ -132,3 +132,20 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+uint64 prev_fp(uint64 fp) {
+  uint64* last_fp_add = (uint64 *)(fp - 16);
+  return *last_fp_add;
+}
+
+void
+backtrace() {
+  uint64 fp = r_fp();
+  uint64 top = PGROUNDUP(fp);
+  uint64 down = PGROUNDDOWN(fp);
+  while (fp <= top && fp >= down) {
+    uint64* return_add = (uint64 *)(fp-8);
+    printf("%p\n", *return_add);
+    fp = prev_fp(fp);
+  }
+}
